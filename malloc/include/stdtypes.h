@@ -12,4 +12,9 @@ typedef enum boolean {
     TRUE
 } boolean_t;
 
+typedef enum stdstatus {
+    STATUS_OK,
+    STATUS_NOT_OK
+} stdstatus_t;
+
 #endif /* __STDTYPES_H__ */
