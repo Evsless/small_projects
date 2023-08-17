@@ -7,8 +7,12 @@
 
 #define HEAP_HEADER  8
 #define BLOCK_HEADER 4
-#define HEAP_SMALL   128
-#define HEAP_MEDIUM  256
+
+#define HEAP_SMALL_SIZE    4 * PAGE_SIZE
+#define HEAP_MEDIUM_SIZE  32 * PAGE_SIZE
+
+#define HEAP_SMALL_BLOCK_SIZE_THR   (HEAP_SMALL_SIZE / 128)
+#define HEAP_MEDIUM_BLOCK_SIZE_THR  (HEAP_MEDIUM_SIZE / 128)
 
 
 typedef enum data_group
@@ -31,7 +35,7 @@ typedef struct heap
     data_group_t data_group;
     size_t total_capacity;
     size_t remaining_space;
-    size_t heap_count;
+    size_t block_count;
 } heap_t;
 
 typedef struct block
