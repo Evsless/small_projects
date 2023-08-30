@@ -1,4 +1,3 @@
-
 /**********************************************************************************************************************
  *  INCLUDES
  *********************************************************************************************************************/
@@ -6,6 +5,10 @@
 
 #include "stdmalloc.h"
 #include "stdtypes.h"
+
+#ifndef RELEASE
+#include "logger.h"
+#endif
 
 /**********************************************************************************************************************
  *  MACRO
@@ -18,11 +21,9 @@
    #. MacOS         : 16 byte alignment.
 */
 #define MEM_ALIGNMENT 0x08u
+#define EMPTY 0
 
 #define ALLIGN_BLOCK(size) ((size + (MEM_ALIGNMENT - 1)) & ~(MEM_ALIGNMENT - 1))
-
-#define DIFF_POINTER(lhs, rhs)       ((void *)lhs - (void *)rhs)
-#define SHIFT_POINTER(ptr, shift_by) ((void *)ptr + shift_by)
 
 /**********************************************************************************************************************
  * GLOBAL VARIABLES
@@ -32,7 +33,7 @@ static heap_t *head;
 /**********************************************************************************************************************
  * LOCAL FUNCTION DECLARATION
  *********************************************************************************************************************/
-static stdstatus_t findAvailableBlock(size_t size, block_t **block);
+static stdstatus_t findAvailableBlock(size_t size, heap_t **heap, block_t **block);
 static stdstatus_t getAvailableLocation(size_t size, block_t **block_begin);
 
 static size_t getHeapSize(size_t data_size);
@@ -41,7 +42,8 @@ static data_group_t getDataGroup(size_t size);
 static stdstatus_t setupNewHeap(size_t size);
 static void setupNewBlock(heap_t *heap_begin, size_t heap_size);
 
-static void parseExistingBlock(block_t *block_begin, size_t size);
+static void parseExistingBlock(heap_t *heap, block_t *block_begin, size_t size);
+static boolean_t mergeBlocks(block_t **block_lhs, block_t **block_rhs, merge_direction_t direction);
 
 /**********************************************************************************************************************
  * LOCAL FUNCTION DEFINITION
@@ -86,29 +88,36 @@ static size_t getHeapSize(size_t data_size)
     return heap_size;
 }
 
-static void parseExistingBlock(block_t *block_begin, size_t size)
+static void parseExistingBlock(heap_t *heap, block_t *block_begin, size_t size)
 {
-    /* Set retval to std status???*/
     block_t *block_end = SHIFT_POINTER(block_begin, BLOCK_HEADER + size);
 
-    block_end->prev = block_begin;
-    block_end->next = block_begin->next;
+    block_end->data_size = block_begin->data_size - size - BLOCK_HEADER;
+    if (EMPTY != block_end->data_size)
+    {
+        block_end->prev = block_begin;
+        block_end->next = block_begin->next;
+        block_end->block_status = FREE;
+    }
+    else
+    {
+        block_end = NULL;
+    }
 
     block_begin->next = block_end;
     block_begin->data_size = size + BLOCK_HEADER;
     block_begin->block_status = OCCUPIED;
 
-    block_end->block_status = FREE;
-    block_end->data_size = DIFF_POINTER(block_end->next, block_end);
-
+    heap->remaining_space -= size + BLOCK_HEADER;
+    if (EMPTY != heap->remaining_space)
+        heap->block_count++;
 }
 
 static void setupNewBlock(heap_t *heap_begin, size_t heap_size)
 {
     block_t *block_begin = SHIFT_POINTER(heap_begin, HEAP_HEADER);
 
-    block_begin->next = SHIFT_POINTER(heap_begin, heap_size);
-    block_begin->data_size = DIFF_POINTER(block_begin->next, block_begin);
+    block_begin->data_size = heap_size - HEAP_HEADER;
     block_begin->block_status = FREE;
 
     heap_begin->block_count++;
@@ -144,7 +153,7 @@ static stdstatus_t setupNewHeap(size_t size)
     return allocation_status;
 }
 
-static stdstatus_t findAvailableBlock(size_t size, block_t **block_begin)
+static stdstatus_t findAvailableBlock(size_t size, heap_t **heap, block_t **block)
 {
     stdstatus_t retVal = STATUS_NOT_OK;
     data_group_t data_group = getDataGroup(size);
@@ -158,9 +167,9 @@ static stdstatus_t findAvailableBlock(size_t size, block_t **block_begin)
         {
             if ((FREE == it_block->block_status) && (it_block->data_size >= size + BLOCK_HEADER))
             {
-                it_heap->block_count++;
+                *heap = it_heap;
+                *block = it_block;
 
-                *block_begin = it_block;
                 retVal = STATUS_OK;
             }
         }
@@ -170,18 +179,43 @@ static stdstatus_t findAvailableBlock(size_t size, block_t **block_begin)
 
 static stdstatus_t getAvailableLocation(size_t size, block_t **block_begin)
 {
-    stdstatus_t op_status = findAvailableBlock(size, block_begin);
+    heap_t *heap;
+    block_t *block;
+
+    stdstatus_t op_status = findAvailableBlock(size, &heap, &block);
 
     if (STATUS_OK == op_status)
     {
-        /* The newly created block needs to be set up. The new block is basically is pointer to end of allocated block. */
-        parseExistingBlock(*block_begin, size);
+        *block_begin = block;
+        parseExistingBlock(heap, block, size);
     }
     else
     {
         *block_begin = NULL;
     }
     return op_status;
+}
+
+static boolean_t mergeBlocks(block_t **block_lhs, block_t **block_rhs, merge_direction_t direction)
+{
+    block_t *lhs_cpy = *block_lhs;
+    block_t *rhs_cpy = *block_rhs;
+
+    block_t *rhs_end = rhs_cpy->next;
+
+    lhs_cpy->next = rhs_end;
+    lhs_cpy->data_size += rhs_cpy->data_size;
+    lhs_cpy->block_status = FREE;
+
+    if (NULL != rhs_end)
+        rhs_end->prev = lhs_cpy;
+
+    if (PREV_BLOCK == direction)
+        *block_rhs = lhs_cpy;
+
+    rhs_cpy = NULL;
+
+    return TRUE;
 }
 
 /**********************************************************************************************************************
@@ -203,5 +237,31 @@ void *stdmalloc(size_t size)
 
     block_begin = SHIFT_POINTER(block_begin, BLOCK_HEADER);
 
+#ifndef RELEASE
+    STDLOG(MALLOC, head);
+#endif
+
     return block_begin;
+}
+
+void stdfree(void *ptr)
+{
+    block_t *block = ptr - BLOCK_HEADER;
+    block_t *block_prev = block->prev;
+    block_t *block_next = block->next;
+
+    boolean_t merge_status = FALSE;
+
+    if (NULL != block_prev && FREE == block_prev->block_status)
+        merge_status = mergeBlocks(&block_prev, &block, PREV_BLOCK);
+
+    if (NULL != block_next && FREE == block_next->block_status)
+        merge_status = mergeBlocks(&block, &block_next, NEXT_BLOCK);
+
+    if (TRUE != merge_status)
+        block->block_status = FREE;
+
+#ifndef RELEASE
+    STDLOG(MALLOC, head);
+#endif
 }
