@@ -90,7 +90,7 @@ static size_t getHeapSize(size_t data_size)
 
 static void parseExistingBlock(heap_t *heap, block_t *block_begin, size_t size)
 {
-    block_t *block_end = SHIFT_POINTER(block_begin, BLOCK_HEADER + size);
+    block_t *block_end = SHIFT_POINTER_RIGHT(block_begin, BLOCK_HEADER + size);
 
     block_end->data_size = block_begin->data_size - size - BLOCK_HEADER;
     if (EMPTY != block_end->data_size)
@@ -98,6 +98,7 @@ static void parseExistingBlock(heap_t *heap, block_t *block_begin, size_t size)
         block_end->prev = block_begin;
         block_end->next = block_begin->next;
         block_end->block_status = FREE;
+        block_end->block_owner = heap;
     }
     else
     {
@@ -115,10 +116,11 @@ static void parseExistingBlock(heap_t *heap, block_t *block_begin, size_t size)
 
 static void setupNewBlock(heap_t *heap_begin, size_t heap_size)
 {
-    block_t *block_begin = SHIFT_POINTER(heap_begin, HEAP_HEADER);
+    block_t *block_begin = SHIFT_POINTER_RIGHT(heap_begin, HEAP_HEADER);
 
     block_begin->data_size = heap_size - HEAP_HEADER;
     block_begin->block_status = FREE;
+    block_begin->block_owner = heap_begin;
 
     heap_begin->block_count++;
 }
@@ -163,7 +165,7 @@ static stdstatus_t findAvailableBlock(size_t size, heap_t **heap, block_t **bloc
         if (it_heap->data_group != data_group)
             continue;
 
-        for (block_t *it_block = SHIFT_POINTER(it_heap, HEAP_HEADER); it_block != NULL; it_block = it_block->next)
+        for (block_t *it_block = SHIFT_POINTER_RIGHT(it_heap, HEAP_HEADER); it_block != NULL; it_block = it_block->next)
         {
             if ((FREE == it_block->block_status) && (it_block->data_size >= size + BLOCK_HEADER))
             {
@@ -204,8 +206,9 @@ static boolean_t mergeBlocks(block_t **block_lhs, block_t **block_rhs, merge_dir
     block_t *rhs_end = rhs_cpy->next;
 
     lhs_cpy->next = rhs_end;
-    lhs_cpy->data_size += rhs_cpy->data_size;
     lhs_cpy->block_status = FREE;
+    lhs_cpy->data_size += rhs_cpy->data_size;
+    lhs_cpy->block_owner->block_count--;
 
     if (NULL != rhs_end)
         rhs_end->prev = lhs_cpy;
@@ -235,7 +238,7 @@ void *stdmalloc(size_t size)
         op_status = getAvailableLocation(size, &block_begin);
     }
 
-    block_begin = SHIFT_POINTER(block_begin, BLOCK_HEADER);
+    block_begin = SHIFT_POINTER_RIGHT(block_begin, BLOCK_HEADER);
 
 #ifndef RELEASE
     STDLOG(MALLOC, head);
@@ -246,11 +249,13 @@ void *stdmalloc(size_t size)
 
 void stdfree(void *ptr)
 {
-    block_t *block = ptr - BLOCK_HEADER;
+    block_t *block = SHIFT_POINTER_LEFT(ptr, BLOCK_HEADER);
     block_t *block_prev = block->prev;
     block_t *block_next = block->next;
 
     boolean_t merge_status = FALSE;
+
+    block->block_owner->remaining_space += block->data_size;
 
     if (NULL != block_prev && FREE == block_prev->block_status)
         merge_status = mergeBlocks(&block_prev, &block, PREV_BLOCK);

@@ -39,7 +39,7 @@ static void log_malloc(heap_t *head)
         printf("* NUM OF BLOCKS : %d\n\n", it_heap->block_count);
 
         block_cnt = 0;
-        for (block_t *it_block = SHIFT_POINTER(it_heap, HEAP_HEADER); it_block != NULL; it_block = it_block->next)
+        for (block_t *it_block = SHIFT_POINTER_RIGHT(it_heap, HEAP_HEADER); it_block != NULL; it_block = it_block->next)
         {
             printf("# BLOCK NO    : %d\n", ++block_cnt);
             printf("# BLOCK SIZE  : %ld\n", it_block->data_size);

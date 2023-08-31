@@ -32,7 +32,7 @@
  *     size_t         - 8 byte;
  *     block_status_t - 4 byte;
  */
-#define BLOCK_HEADER 32u
+#define BLOCK_HEADER 40u
 
 #define HEAP_SMALL_SIZE 4 * STD_PAGE_SIZE
 #define HEAP_MEDIUM_SIZE 32 * STD_PAGE_SIZE
@@ -40,8 +40,8 @@
 #define HEAP_SMALL_BLOCK_SIZE_THR (HEAP_SMALL_SIZE / 128)
 #define HEAP_MEDIUM_BLOCK_SIZE_THR (HEAP_MEDIUM_SIZE / 128)
 
-#define DIFF_POINTER(lhs, rhs) ((void *)lhs - (void *)rhs)
-#define SHIFT_POINTER(ptr, shift_by) ((void *)ptr + shift_by)
+#define SHIFT_POINTER_LEFT(ptr, shift_by)  ((void *)ptr - shift_by)
+#define SHIFT_POINTER_RIGHT(ptr, shift_by) ((void *)ptr + shift_by)
 
 /**********************************************************************************************************************
  *  ENUM
@@ -80,6 +80,7 @@ typedef struct heap
 
 typedef struct block
 {
+    struct heap *block_owner;
     struct block *next;
     struct block *prev;
     size_t data_size;
