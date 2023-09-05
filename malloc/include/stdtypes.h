@@ -2,6 +2,8 @@
 #define __STDTYPES_H__
 #include <stdint.h>
 
+#define size_t unsigned long
+
 typedef uint8_t uint8;
 typedef uint16_t uint16;
 typedef uint32_t uint32;

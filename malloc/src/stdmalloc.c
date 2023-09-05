@@ -37,6 +37,7 @@ static stdstatus_t findAvailableBlock(size_t size, heap_t **heap, block_t **bloc
 static stdstatus_t getAvailableLocation(size_t size, block_t **block_begin);
 
 static size_t getHeapSize(size_t data_size);
+static void removeEmptyHeap(heap_t *heap);
 static data_group_t getDataGroup(size_t size);
 
 static stdstatus_t setupNewHeap(size_t size);
@@ -152,7 +153,33 @@ static stdstatus_t setupNewHeap(size_t size)
 
         head = new_heap;
     }
+
+#ifndef RELEASE
+    STDLOG(MALLOC_HEAP, head);
+#endif
+
     return allocation_status;
+}
+
+static void removeEmptyHeap(heap_t *heap)
+{
+    heap_t *heap_next = heap->next;
+    heap_t *heap_prev = heap->prev;
+
+    if (NULL != heap_prev)
+        heap_prev->next = heap_next;
+
+    if (NULL != heap_next)
+        heap_next->prev = heap_prev;
+
+    munmap(heap, heap->total_capacity);
+
+    if (heap == head)
+        head = NULL;
+
+#ifndef RELEASE
+    STDLOG(MALLOC_HEAP, head);
+#endif
 }
 
 static stdstatus_t findAvailableBlock(size_t size, heap_t **heap, block_t **block)
@@ -241,7 +268,7 @@ void *stdmalloc(size_t size)
     block_begin = SHIFT_POINTER_RIGHT(block_begin, BLOCK_HEADER);
 
 #ifndef RELEASE
-    STDLOG(MALLOC, head);
+    STDLOG(MALLOC_ALL, head);
 #endif
 
     return block_begin;
@@ -266,7 +293,6 @@ void stdfree(void *ptr)
     if (TRUE != merge_status)
         block->block_status = FREE;
 
-#ifndef RELEASE
-    STDLOG(MALLOC, head);
-#endif
+    if (block->block_owner->block_count == 1)
+        removeEmptyHeap(block->block_owner);
 }

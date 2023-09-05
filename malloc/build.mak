@@ -10,6 +10,7 @@ LIST_OF_INCLUDES = include/
 
 LIST_OF_SRC += main.c
 LIST_OF_SRC += src/stdmalloc.c
+LIST_OF_SRC += src/stdstring.c
 
 ifneq ($(RELEASE),y)
 LIST_OF_SRC      += src/debug/logger.c
