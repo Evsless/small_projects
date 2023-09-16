@@ -1,13 +1,11 @@
 #include "stdmalloc.h"
+#include "stdstring.h"
 
 int main(int argc, char *argv[])
 {
-    int* a = stdmalloc(16);
-    int* b = stdmalloc(600);
-    int* c = stdmalloc(1300);
-
+    int *a = stdcalloc(4, sizeof(int));
+    int *b = stdmalloc(8);
+    a = stdrealloc(a, 4);
     stdfree(a);
-    stdfree(b);
-    stdfree(c);
     return 0;
 }

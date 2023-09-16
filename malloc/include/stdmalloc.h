@@ -91,6 +91,8 @@ typedef struct block
  * GLOBAL FUNCTION DECLARATION
  *********************************************************************************************************************/
 void *stdmalloc(size_t size);
+void *stdcalloc(size_t num, size_t size);
+void *stdrealloc(void* ptr, size_t new_size);
 void stdfree(void *ptr);
 
 #endif /* __MALLOC_H */

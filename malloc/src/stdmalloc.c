@@ -5,6 +5,7 @@
 
 #include "stdmalloc.h"
 #include "stdtypes.h"
+#include "stdstring.h"
 
 #ifndef RELEASE
 #include "logger.h"
@@ -35,6 +36,7 @@ static heap_t *head;
  *********************************************************************************************************************/
 static stdstatus_t findAvailableBlock(size_t size, heap_t **heap, block_t **block);
 static stdstatus_t getAvailableLocation(size_t size, block_t **block_begin);
+static boolean_t isBlockExist(const block_t *block);
 
 static size_t getHeapSize(size_t data_size);
 static void removeEmptyHeap(heap_t *heap);
@@ -124,6 +126,24 @@ static void setupNewBlock(heap_t *heap_begin, size_t heap_size)
     block_begin->block_owner = heap_begin;
 
     heap_begin->block_count++;
+}
+
+static boolean_t isBlockExist(const block_t *block)
+{
+    boolean_t res = FALSE;
+
+    heap_t *heap_it = head;
+    while (NULL != heap_it && heap_it != block->block_owner)
+        heap_it = heap_it->next;
+
+    block_t *block_it = SHIFT_POINTER_RIGHT(heap_it, HEAP_HEADER);
+    while (NULL != heap_it && block != block_it)
+        block_it = block_it->next;
+
+    if (NULL != heap_it && block == block_it)
+        res = TRUE;
+
+    return res;
 }
 
 static stdstatus_t setupNewHeap(size_t size)
@@ -274,6 +294,52 @@ void *stdmalloc(size_t size)
     return block_begin;
 }
 
+void *stdcalloc(size_t num, size_t size)
+{
+    size_t alloc_size = num * size;
+
+    block_t *block_begin = stdmalloc(alloc_size);
+    stdmemset(block_begin, 0, alloc_size);
+
+    return block_begin;
+}
+
+void *stdrealloc(void *ptr, size_t new_size)
+{
+    block_t *block_begin = SHIFT_POINTER_LEFT(ptr, BLOCK_HEADER);
+
+    if (NULL == ptr)
+    {
+        block_begin = stdmalloc(new_size);
+    }
+    else if (EMPTY == new_size)
+    {
+        stdfree(block_begin);
+        block_begin = NULL;
+    }
+    else
+    {
+        if (FALSE == isBlockExist(block_begin))
+        {
+            block_begin = NULL;
+        }
+        else if (new_size == block_begin->data_size)
+        {
+            block_begin = ptr;
+        }
+        else
+        {
+            stdfree(ptr);
+
+            block_t *new_block = stdmalloc(new_size);
+            stdmemmove(new_block, block_begin, block_begin->data_size > new_size ? new_size : block_begin->data_size);
+
+            block_begin = new_block;
+        }
+    }
+    return block_begin;
+}
+
 void stdfree(void *ptr)
 {
     block_t *block = SHIFT_POINTER_LEFT(ptr, BLOCK_HEADER);
@@ -295,4 +361,8 @@ void stdfree(void *ptr)
 
     if (block->block_owner->block_count == 1)
         removeEmptyHeap(block->block_owner);
+
+#ifndef RELEASE
+    STDLOG(MALLOC_ALL, head);
+#endif
 }

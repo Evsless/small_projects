@@ -25,5 +25,7 @@
  * GLOBAL FUNCTION DECLARATION
  *********************************************************************************************************************/
 void* stdmemset(void* dest, register int val, register size_t len);
+void *stdmemcpy(void *dest, const void *src, register size_t len);
+void* stdmemmove(void* dest, const void *src, register size_t len);
 
 #endif /* __STDSTRING_H__ */

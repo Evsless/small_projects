@@ -4,6 +4,7 @@
  *********************************************************************************************************************/
 #include "stdstring.h"
 
+#include "stdtypes.h"
 /**********************************************************************************************************************
  *  MACRO
  *********************************************************************************************************************/
@@ -20,6 +21,52 @@ void *stdmemset(void *dest, register int val, register size_t len)
     register unsigned char *ptr = (unsigned char *)dest;
     while (len-- > 0)
         *ptr++ = val;
+
+    return dest;
+}
+
+void *stdmemcpy(void *dest, const void *src, register size_t len)
+{
+    char *to = dest;
+    const char *from = src;
+
+    for (size_t i = 0; i < len; i++)
+        to[i] = from[i];
+
+    return dest;
+}
+
+void *stdmemmove(void *dest, const void *src, register size_t len)
+{
+    void *ret;
+
+    char *from = (char *)src;
+    char *to = (char *)dest;
+
+    boolean_t do_return = FALSE;
+
+    if (dest == src || 0 == len)
+    {
+        ret = dest;
+        do_return = TRUE;
+    }
+
+    if (FALSE == do_return && (to > from && to - from < len))
+    {
+        /**
+         * First overlapping option
+         * <from........>
+         *       <to........>
+         * Copy in reverse to avoid overwriting 'from'.
+         */
+        for (int i = len - 1; i >= 0; i--)
+            to[i] = from[i];
+
+        do_return = TRUE;
+    }
+
+    if (FALSE == do_return)
+        stdmemcpy(dest, src, len);
 
     return dest;
 }
